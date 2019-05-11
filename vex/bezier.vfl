@@ -1,0 +1,354 @@
+/*
+    Utility to handle lines and cubic bezier curves.
+*/
+
+struct Curves {
+    vector A[];
+    vector B[];
+    
+    void render(int geohandle;)
+    {
+        if (len(A) != 4 || len(B) != 4) return;
+        
+        int prmA = addprim(geohandle, "polyline");
+        int prmB = addprim(geohandle, "polyline");
+        
+        foreach(vector p; A) {
+            int pt = addpoint(geohandle, p);
+            addvertex(geohandle, prmA, pt);
+        }
+        
+        foreach(vector p; B) {
+            int pt = addpoint(geohandle, p);
+            addvertex(geohandle, prmB, pt);
+        }
+    }
+}
+
+/*
+    Get point position on bezier curve from 4 point positions
+*/
+vector getPointOnBezier (float t; vector p0; vector p1; vector p2; vector p3) 
+{
+    return (1-t)*(1-t)*(1-t)*p0 + 3*t*(1-t)*(1-t)*p1 + 3*t*t*(1-t)*p2 + t*t*t*p3;
+}
+
+/*
+    Get point position on bezeir curve from 4 ptnums and t
+*/      
+vector getPointOnBezier (int geo; float t; int curve_pts[])
+{
+    vector p0 = point(geo, "P", curve_pts[0]);
+    vector p1 = point(geo, "P", curve_pts[1]);
+    vector p2 = point(geo, "P", curve_pts[2]);
+    vector p3 = point(geo, "P", curve_pts[3]);
+    return getPointOnBezier(t, p0, p1, p2, p3);
+}
+
+/*
+    split bezier curve at T and returns first half
+*/
+vector[] splitBezierFirst (float t; vector p0; vector p1; vector p2; vector p3; int reverse)
+{
+    vector c0 = lerp(p0, p1, t);
+    vector c1 = lerp(p1, p2, t);
+    vector c2 = lerp(p2, p3, t);
+
+    vector d0 = lerp(c0, c1, t);
+    vector d1 = lerp(c1, c2, t);
+    
+    vector e0 = lerp(d0, d1, t);
+    
+    return reverse ? array(e0, d0, c0, p0) : array(p0, c0, d0, e0) ;
+}
+
+vector[] splitBezierFirst (float t; vector p[]; int reverse)
+{
+    return splitBezierFirst(t, p[0], p[1], p[2], p[3], reverse);
+}
+/*
+    split bezier curve at T and returns the last half
+*/
+vector[] splitBezierLast (float t; vector p0; vector p1; vector p2; vector p3; int reverse)
+{
+    return splitBezierFirst(1.0 - t, p3, p2, p1, p0, 1 - reverse);
+}
+
+vector[] splitBezierLast (float t; vector p[]; int reverse)
+{
+    return splitBezierLast(t, p[0], p[1], p[2], p[3], reverse);
+}
+
+vector[] subcurve(vector curve_pos[]; float t0; float t1)
+{
+    if (t0 > 0.0) {
+        curve_pos = splitBezierLast(t0, curve_pos, 0);
+    }
+    if (t1 < 1.0) {
+        curve_pos = splitBezierFirst((t1 - t0) / (1.0 - t0), curve_pos, 0);
+    }
+    return curve_pos;
+}
+
+vector[] subcurve(vector p0; vector p1; vector p2; vector p3; float t0; float t1)
+{
+    vector curve_pos[] = array(p0, p1, p2, p3);
+    return subcurve(curve_pos, t0, t1);
+}
+
+vector[] subcurve(int geo; int p0; int p1; int p2; int p3; float t0; float t1)
+{
+    return subcurve(point(geo, "P", p0),
+                    point(geo, "P", p1),
+                    point(geo, "P", p2),
+                    point(geo, "P", p3),
+                    t0, t1);
+}
+
+vector[] subcurve(int geo; int curve_pts[]; float t0; float t1)
+{
+    vector curve_pos[] = array(
+            vector(point(geo, "P", curve_pts[0])),
+            vector(point(geo, "P", curve_pts[1])),
+            vector(point(geo, "P", curve_pts[2])),
+            vector(point(geo, "P", curve_pts[3])));
+    return subcurve(curve_pos, t0, t1);
+}
+
+/*
+    Find Cubic Roots and return t value.
+    
+    Original Code:
+    https://pomax.github.io/bezierinfo/#extremities
+*/
+float[] getCubicRoots(vector p0; vector p1; vector p2; vector p3;) {
+    float d = (-p0.z + 3*p1.z - 3*p2.z + p3.z);
+    float a = (3*p0.z - 6*p1.z + 3*p2.z) / d;
+    float b = (-3*p0.z + 3*p1.z) / d;
+    float c = p0.z / d;
+
+    float p = (3*b - a*a) / 3.0;
+    float pc = p/3;
+    float q = (2*a*a*a - 9*a*b + 27*c) / 27.0;
+    float q2 = q/2;
+    float D = q2*q2 + pc*pc*pc;
+    
+    float u1,v1,root1,root2,root3;
+    float result[] = {};
+        
+    
+    if (D < 0)
+    {
+        float mp3  = pow(-p/3, 3);
+        float r = sqrt(mp3);
+        float t = -q / (2*r);
+        float cosphi = t < -1 ? -1 : t > 1 ? 1 : t;
+        float phi  = acos(cosphi);
+        float t1   = 2*cbrt(r);
+        root1 = t1 * cos(phi/3) - a/3;
+        root2 = t1 * cos((phi+2*PI)/3) - a/3;
+        root3 = t1 * cos((phi+4*PI)/3) - a/3;
+        push(result, root1);
+        push(result, root2);
+        push(result, root3);
+    }
+    else if (D == 0)
+    {
+        u1 = q2 < 0 ? cbrt(-q2) : -cbrt(q2);
+        root1 = 2*u1 - a/3;
+        root2 = -u1 - a/3;
+        push(result, root1);
+        push(result, root2);
+    }
+    else
+    {
+        float sd = sqrt(D);
+        u1 = cbrt(sd - q2);
+        v1 = cbrt(sd + q2);
+        root1 = u1 - v1 - a/3;
+        push(result, root1);
+    }
+    
+    return result;
+}
+
+/*
+    Get intersection point with 2 segmented line.
+    returns 0 if there's no intersection.
+*/
+vector intersectionLine(vector a0; vector a1; vector b0; vector b1)
+{
+    vector a = a1 - a0;
+    vector b = b1 - b0;
+    float d = cross(a, b).y;
+    
+    if (d == 0) return set(0);
+    
+    vector c = b0 - a0;
+    float u = cross(c, b).y / d;
+    float v = cross(c, a).y / d;
+    
+    if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) return set(0);
+    
+    return a0 + a * u;
+}
+
+
+/*
+    check two lines' intersection
+*/
+int intersects(vector a0; vector a1; vector b0; vector b1)
+{
+    vector a = a1 - a0;
+    vector b = b1 - b0;
+    float d = cross(a, b).y;
+    
+    if (d == 0) return 0;
+    
+    vector c = b0 - a0;
+    float u = cross(c, b).y / d;
+    float v = cross(c, a).y / d;
+    
+    if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) return 0;
+    
+    return 1;
+}
+
+
+
+/*
+    Get intersection points with line and bezier curve.
+*/
+float[] intersectionLineBezierT(int geo; int line[]; int curve[]) {
+    /*
+        check if the point is inside line segment area
+    */
+    function int point_in_line_area(vector p; vector l0; vector l1)
+    {
+        if (l0.x == l1.x) return p.z >= min(l0.z, l1.z) && p.z <= max(l0.z, l1.z);
+        if (l0.z == l1.z) return p.x >= min(l0.x, l1.x) && p.x <= max(l0.x, l1.x);
+        return (
+            p.z >= min(l0.z, l1.z) && p.z <= max(l0.z, l1.z)
+            && p.x >= min(l0.x, l1.x) && p.x <= max(l0.x, l1.x)
+        );
+    }
+    float result[] = {};
+    vector l0 = point(geo, "P", line[0]);
+    vector l1 = point(geo, "P", line[1]);
+
+    matrix m = ident();
+    float angle = atan2(l1.z - l0.z, l1.x - l0.x);
+    translate(m, -l0);
+    rotate(m, angle, {0, 1, 0});
+
+    float roots[] = getCubicRoots(
+        point(geo, "P", curve[0]) * m,
+        point(geo, "P", curve[1]) * m,
+        point(geo, "P", curve[2]) * m,
+        point(geo, "P", curve[3]) * m
+    );
+
+    foreach (float t; roots) {
+        if (t >= 0.0 && t <= 1.0) {
+            vector p = getPointOnBezier(geo, t, curve);
+            if (point_in_line_area(p, l0, l1)) {
+                push(result, t);
+            }
+        }
+    }
+    return result;
+}
+
+
+/*
+    Get intersection points with line and bezier curve.
+*/
+vector[] intersectionLineBezier(int geo; int line[]; int curve[]) {
+    vector result[] = {};
+    float roots[] = intersectionLineBezierT(geo, line, curve);
+    foreach (float t; roots) push(result, getPointOnBezier(geo, t, curve));
+    return result;
+}
+
+
+/*
+    returns order of verticies as convex hull
+*/
+int[] bezierConvexHull(vector pos[])
+{
+    int orders[];
+    if (intersects(pos[0], pos[3], pos[1], pos[2])){
+        orders = array(0, 1, 3, 2);
+    } else {
+        orders = array(0, 1, 2, 3);
+    }
+    return orders;
+}
+
+
+float bezierLength(vector p0; vector p1; vector p2; vector p3; int iter)
+{
+    float t = 0;
+    vector curr, next;
+    curr = getPointOnBezier(0, p0, p1, p2, p3);
+    float sum = 0;
+    while (t < 1.0)
+    {
+        t += 1.0 / iter;
+        next = getPointOnBezier(t, p0, p1, p2, p3);
+        sum += length(next - curr);
+        curr = next;
+    }
+    return sum;
+}
+
+
+vector[] convexHull(vector pos[])
+{
+    vector hull[];
+    vector A, B, C;
+    float X;
+    
+    int start = 0;
+    foreach(int i; vector p; pos) {
+        if (pos[start].x > p.x) start = i;
+    }
+    
+    A = pos[start];
+    do {
+        push(hull, A);
+        B = pos[0];
+        for (int i=1; i<len(pos); i++)
+        {
+            C = pos[i];
+            if (B == A) {
+                B = C;
+            } else {
+                X = cross(B - A, C - A).y;
+                if (X < 0 || (X == 0 && length(C-A) > length(B-A))) {
+                    B = C;
+                }
+            }
+        }
+        A = B;
+    } while (A != hull[0]);
+    
+    return hull;
+}
+
+int doOverlap(vector curveA[]; vector curveB[])
+{
+    vector amin = min(curveA);
+    vector amax = max(curveA);
+    vector bmin = min(curveB);
+    vector bmax = max(curveB);
+    
+    if (amin.x > bmax.x || bmin.x > amax.x) {
+        return 0;
+    }
+    if (amin.z > bmax.z || bmin.z > amax.z) {
+        return 0;
+    }
+    
+    return 1;
+}
