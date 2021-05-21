@@ -1,0 +1,672 @@
+
+/*
+    Get point position on bezier curve from 4 point positions
+*/
+vector2 getPointOnBezier (float t; vector2 p0; vector2 p1; vector2 p2; vector2 p3) 
+{
+    return (1-t)*(1-t)*(1-t)*p0 + 3*t*(1-t)*(1-t)*p1 + 3*t*t*(1-t)*p2 + t*t*t*p3;
+}
+
+vector2 getPointOnBezier (float t; vector2 p[]) 
+{
+    return getPointOnBezier (t, p[0], p[1], p[2], p[3]);
+}
+
+vector getPointOnBezier (float t; vector p0; vector p1; vector p2; vector p3) 
+{
+    return (1-t)*(1-t)*(1-t)*p0 + 3*t*(1-t)*(1-t)*p1 + 3*t*t*(1-t)*p2 + t*t*t*p3;
+}
+
+vector getPointOnBezier (float t; vector p[]) 
+{
+    return getPointOnBezier (t, p[0], p[1], p[2], p[3]);
+}
+
+
+/*
+    Carve bezier curve by De Casteljau's algorithm
+    Returns a subcurve of from 0 to t.
+*/
+vector2[] carveBezier (float t; vector2 p0; vector2 p1; vector2 p2; vector2 p3)
+{
+    vector2 c0 = lerp(p0, p1, t);
+    vector2 c1 = lerp(p1, p2, t);
+    vector2 c2 = lerp(p2, p3, t);
+
+    vector2 d0 = lerp(c0, c1, t);
+    vector2 d1 = lerp(c1, c2, t);
+    
+    vector2 e0 = lerp(d0, d1, t);
+    
+    return array(p0, c0, d0, e0);
+}
+
+vector2[] carveBezier (float t; vector2 p[])
+{
+    return carveBezier(t, p[0], p[1], p[2], p[3]);
+}
+
+vector[] carveBezier (float t; vector p0; vector p1; vector p2; vector p3)
+{
+    vector c0 = lerp(p0, p1, t);
+    vector c1 = lerp(p1, p2, t);
+    vector c2 = lerp(p2, p3, t);
+
+    vector d0 = lerp(c0, c1, t);
+    vector d1 = lerp(c1, c2, t);
+    
+    vector e0 = lerp(d0, d1, t);
+    
+    return array(p0, c0, d0, e0);
+}
+
+vector[] carveBezier (float t; vector p[])
+{
+    return carveBezier(t, p[0], p[1], p[2], p[3]);
+}
+
+
+/*
+    subcurve
+
+    returns part of the curve between t0 and t1
+*/
+vector[] subcurve(vector pos[]; float t0; float t1)
+{
+    vector _pos[] = set(pos);
+
+    float _t0 = t0, _t1 = t1;
+    if (_t1 < _t0) {
+        _t0 = t1;
+        _t1 = t0;
+    }
+    _t0 = clamp(_t0, 0, 1);
+    _t1 = clamp(_t1, 0, 1);
+    
+    if (t0 > 0) _pos = reverse(carveBezier(1 - t0, reverse(_pos)));
+    if (t1 < 1) _pos = carveBezier((t1 - t0) / (1.0 - t0), _pos);
+    return _pos;
+}
+
+vector2[] subcurve(vector2 pos[]; float t0; float t1)
+{
+    vector2 _pos[] = set(pos);
+
+    float _t0 = t0, _t1 = t1;
+    if (_t1 < _t0) {
+        _t0 = t1;
+        _t1 = t0;
+    }
+    _t0 = clamp(_t0, 0, 1);
+    _t1 = clamp(_t1, 0, 1);
+    
+    if (_t0 > 0)  _pos = reverse(carveBezier(1 - _t0, reverse(_pos)));
+    if (_t1 < 1)  _pos = carveBezier((_t1 - _t0) / (1.0 - _t0), _pos);
+    return _pos;
+}
+
+
+/*
+    returns a subline from two points
+*/  
+vector2[] subline(vector2 pos[]; float t0; float t1)
+{
+    vector2 p0 = pos[0];
+    vector2 p1 = pos[1];
+    if (t0 > 0) p0 = lerp(pos[0], pos[1], t0);
+    if (t1 < 1) p1 = lerp(pos[1], pos[0], 1 - t1);
+    return array(p0, p1);
+}
+
+vector[] subline(vector pos[]; float t0; float t1)
+{
+    vector p0 = pos[0];
+    vector p1 = pos[1];
+    if (t0 > 0) p0 = lerp(pos[0], pos[1], t0);
+    if (t1 < 1) p1 = lerp(pos[1], pos[0], 1 - t1);
+    return array(p0, p1);
+}
+
+
+/*
+    Find Cubic Roots and return t value.
+    
+    Original Code:
+    https://pomax.github.io/bezierinfo/#extremities
+
+    filters result by t >= 0 && t <= 1
+*/
+float[] getCubicRoots(vector2 p0; vector2 p1; vector2 p2; vector2 p3) {
+    function int accept (float t) {
+        return t >= 0 && t <= 1;
+    }
+    float d = (-p0.y + 3*p1.y - 3*p2.y + p3.y);
+    float a = (3*p0.y - 6*p1.y + 3*p2.y) / d;
+    float b = (-3*p0.y + 3*p1.y) / d;
+    float c = p0.y / d;
+
+    float p = (3*b - a*a) / 3.0;
+    float pc = p/3;
+    float q = (2*a*a*a - 9*a*b + 27*c) / 27.0;
+    float q2 = q/2;
+    float D = q2*q2 + pc*pc*pc;
+    
+    float u1,v1,root1,root2,root3;
+    float result[];
+    
+    if (D < 0)
+    {
+        float mp3  = pow(-p/3, 3);
+        float r = sqrt(mp3);
+        float t = -q / (2*r);
+        float cosphi = t < -1 ? -1 : t > 1 ? 1 : t;
+        float phi  = acos(cosphi);
+        float t1   = 2*cbrt(r);
+        root1 = t1 * cos(phi/3) - a/3;
+        root2 = t1 * cos((phi+2*PI)/3) - a/3;
+        root3 = t1 * cos((phi+4*PI)/3) - a/3;
+
+        if (accept(root1)) push(result, root1);
+        if (accept(root2)) push(result, root2);
+        if (accept(root3)) push(result, root3);
+    }
+    else if (D == 0)
+    {
+        u1 = q2 < 0 ? cbrt(-q2) : -cbrt(q2);
+        root1 = 2*u1 - a/3;
+        root2 = -u1 - a/3;
+
+        if (accept(root1)) push(result, root1);
+        if (accept(root2)) push(result, root2);
+    }
+    else
+    {
+        float sd = sqrt(D);
+        u1 = cbrt(sd - q2);
+        v1 = cbrt(sd + q2);
+        root1 = u1 - v1 - a/3;
+        if (accept(root1)) push(result, root1);
+    }
+    
+    return result;
+}
+
+float[] getCubicRoots(vector2 pos[]) { return getCubicRoots(pos[0], pos[1], pos[2], pos[3]); }
+
+
+/*
+    Get intersection points with line and bezier curve.
+    each result is a list of normalized u.
+*/
+void intersectionLineBezier(vector2 curve[]; vector2 line[]; float resultA[]; float resultB[]) {
+    /*
+        check if the point is inside line segment area
+    */
+    function int pointInLineSegment(vector2 p; vector2 l0; vector2 l1)
+    {
+        float xmax = max(l0.x, l1.x), xmin = min(l0.x, l1.x);
+        float ymax = max(l0.y, l1.y), ymin = min(l0.y, l1.y);
+        if (l0.x == l1.x) return p.y >= ymin && p.y <= ymax;
+        if (l0.y == l1.y) return p.x >= xmin && p.x <= xmax;
+        return p.y >= ymin && p.y <= ymax && p.x >= xmin && p.x <= xmax;
+    }
+
+    float angle = atan2(line[1].y - line[0].y, line[1].x - line[0].x);
+
+    vector2 _curve[] = set(curve);
+    matrix2 rotm = set(cos(angle), -sin(angle), sin(angle), cos(angle));
+
+    for (int i=0; i<4; i++) {
+        _curve[i] = (_curve[i] - line[0]) * rotm;
+    }
+    float roots[] = getCubicRoots(_curve);
+
+    // edge case when D==0
+    if (len(roots) == 2 && roots[0] == 0 && roots[1] == 0) return;
+    float lineLen = distance(line[0], line[1]);
+
+    foreach (float t; roots) {
+        if (t >= 0.0 && t <= 1.0) {
+            vector2 p = getPointOnBezier(t, curve);
+            if (pointInLineSegment(p, line[0], line[1])) {
+                push(resultA, t);
+                push(resultB, distance(p, line[0]) / lineLen);
+            }
+        }
+    }
+}
+
+
+/*
+    Get intersection point with 2 segmented line.
+    returns 0 if there's no intersection.
+*/
+vector2 intersectionLine(vector2 a0; vector2 a1; vector2 b0; vector2 b1; int succeed)
+{
+    if (
+        max(a0.x, a1.x) <= min(b0.x, b1.x) ||
+        min(a0.x, a1.x) >= max(b0.x, b1.x) ||
+        max(a0.y, a1.y) <= min(b0.y, b1.y) ||
+        min(a0.y, a1.y) >= max(b0.y, b1.y)
+        ) {
+            succeed = 0;
+            return set(0);
+    } 
+
+    vector2 a = a1 - a0;
+    vector2 b = b1 - b0;
+    float d = cross(a, b).z;
+    
+    if (d == 0) {
+        succeed = 0;
+        return set(0);
+    }
+    
+    vector2 c = b0 - a0;
+    float u = cross(c, b).z / d;
+    float v = cross(c, a).z / d;
+    
+    if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
+        succeed = 0;
+        return set(0);
+    }
+    
+    succeed = 1;
+    return a0 + a * u;
+}
+
+/*
+    Get intersection point with 2 segmented line.
+    returns an empty array if there's no intersection.
+*/
+function float[] intersectionLine(vector a0; vector a1; vector b0; vector b1)
+{
+    if (
+        max(a0.x, a1.x) <= min(b0.x, b1.x) ||
+        min(a0.x, a1.x) >= max(b0.x, b1.x) ||
+        max(a0.y, a1.y) <= min(b0.y, b1.y) ||
+        min(a0.y, a1.y) >= max(b0.y, b1.y)
+        ) {
+            return {};
+    } 
+
+    vector a = a1 - a0;
+    vector b = b1 - b0;
+    float d = cross(a, b).z;
+    
+    if (d == 0) return {};
+    
+    vector c = b0 - a0;
+    float u = cross(c, b).z / d;
+    float v = cross(c, a).z / d;
+    
+    if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) return {};
+    
+    return array(u, v);
+}
+
+/*
+    Get intersection points with line and bezier curve.
+    each result is a list of normalized u.
+*/
+function float[] intersectionLineBezierT(vector2 curve[]; vector2 line[]) {
+    /*
+        check if the point is inside line segment area
+    */
+    function int pointInLineSegment(vector2 p; vector2 l0; vector2 l1)
+    {
+        float xmax = max(l0.x, l1.x), xmin = min(l0.x, l1.x);
+        float ymax = max(l0.y, l1.y), ymin = min(l0.y, l1.y);
+        if (l0.x == l1.x) return p.y >= ymin && p.y <= ymax;
+        if (l0.y == l1.y) return p.x >= xmin && p.x <= xmax;
+        return p.y >= ymin && p.y <= ymax && p.x >= xmin && p.x <= xmax;
+    }
+
+    float result[] = {};
+    float angle = atan2(line[1].y - line[0].y, line[1].x - line[0].x);
+
+    vector2 _curve[] = set(curve);
+    matrix2 rotm = set(cos(angle), -sin(angle), sin(angle), cos(angle));
+
+    for (int i=0; i<4; i++) {
+        _curve[i] = (_curve[i] - line[0]) * rotm;
+    }
+    float roots[] = getCubicRoots(_curve);
+
+    // edge case when D==0
+    if (len(roots) == 2 && roots[0] == 0 && roots[1] == 0) return {};
+
+    foreach (float t; roots) {
+        vector2 p = getPointOnBezier(t, curve);
+        if (pointInLineSegment(p, line[0], line[1])) {
+            push(result, t);
+        }
+    }
+    return result;
+}
+
+
+
+int doOverlap(vector2 curveA[]; vector2 curveB[])
+{
+    vector amin = min(curveA);
+    vector amax = max(curveA);
+    vector bmin = min(curveB);
+    vector bmax = max(curveB);
+    
+    if (amin.x > bmax.x || bmin.x > amax.x) {
+        return 0;
+    }
+    if (amin.y > bmax.y || bmin.y > amax.y) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+
+vector2[] convexHull(vector2 pos[])
+{
+    vector2 hull[];
+    vector2 A, B, C;
+    float X;
+
+    int start = 0;
+    foreach(int i; vector2 p; pos) {
+        if (pos[start].x > p.x) start = i;
+    }
+    
+    A = pos[start];
+    int count = 0;
+    do {
+        push(hull, A);
+        B = pos[0];
+        for (int i=1; i<len(pos); i++)
+        {
+            C = pos[i];
+            if (B == A) {
+                B = C;
+            } else {
+                X = cross(B - A, C - A).z;
+                if (X > 0 || (X == 0 && length(C-A) > length(B-A))) {
+                    B = C;
+                }
+            }
+        }
+        A = B;
+    } while (A != hull[0] && len(hull) <= len(pos));
+    
+    return hull;
+}
+
+/* experimental */
+float[] bezierLengthSegments(vector2 p0; vector2 p1; vector2 p2; vector2 p3; int numdiv)
+{
+    float seglen[];
+    vector pA, pB;
+    pA = getPointOnBezier(0, p0, p1, p2, p3);
+    float step = 1.0 / float(numdiv);
+    float t;
+    for (int i=1; i<=numdiv; i++) {
+        t = i * step;
+        pB = getPointOnBezier(t, p0, p1, p2, p3);
+        append(seglen, length(pB - pA));
+        pA = pB;
+    }
+    return seglen;
+}
+float[] bezierLengthSegments(vector2 curve[]; int numdiv)
+{
+    return bezierLengthSegments(curve[0], curve[1], curve[2], curve[3], numdiv);
+}
+
+
+
+float[] bezierClipping(vector2 curveA[]; vector2 curveB[]) {
+
+    function float signedLinePointDist(vector line; vector2 pt) {
+        float a = line.x;
+        float b = line.y;
+        float c = line.z;
+        float x = pt.x;
+        float y = pt.y;
+        return (a*x + b*y + c) / sqrt(a*a + b*b);
+    }
+
+    function vector2 horizontalLineIntersection(vector2 p0; vector2 p1; float y; int succeed)
+    {
+        vector _p0 = set(p0.x, p0.y, 1);
+        vector _p1 = set(p1.x, p1.y, 1);
+        vector lineA = cross(_p0, _p1);
+        vector x = set(-(lineA.y * y + lineA.z) / lineA.x, y, 0);
+        vector pmin = min(_p0, _p1);
+        vector pmax = max(_p0, _p1);
+        
+        if (x.x <= pmax.x && x.x >= pmin.x && x.y <= pmax.y && x.y >= pmin.y) {
+            succeed = 1;
+            return set(x.x, x.y);
+        } else {
+            succeed = 0;
+            return set(0);
+        }
+    }
+
+    // lineB as homogenious coord
+    vector lineB = cross(
+        set(curveB[0].x, curveB[0].y, 1),
+        set(curveB[3].x, curveB[3].y, 1)
+    );
+    float d1 = signedLinePointDist(lineB, curveB[1]);
+    float d2 = signedLinePointDist(lineB, curveB[2]);
+
+    // get fat line for line B
+    float coeff = (d1 * d2 > 0) ? (3 / 4.) : (4 / 9.);
+    float dmin = min(0, d1, d2) * coeff;
+    float dmax = max(0, d1, d2) * coeff;
+    float dRange[] = array(dmin, dmax);
+
+    // get distance to lineB for each curveA's control points
+    // printf("bc:: tdist \n");
+    vector2 tDist[];
+    float tCandidates[];
+    foreach (int i; vector2 p; curveA) {
+        float t = i / 3.0;
+        float dist = signedLinePointDist(lineB, p);
+        push(tDist, set(t, dist));
+        
+        if (dist >= dmin && dist <= dmax) 
+            push(tCandidates, t);
+    }
+
+    // case all in range
+    if (len(tCandidates) == 4) return {0.0, 1.0};
+
+    // convexhull of dist curve
+    vector2 hull[] = convexHull(tDist);
+
+    // intersection between D convexhull and dmin/dmax
+    int total = len(hull);
+    int succeed;
+    vector2 x, p0, p1;
+    for (int i=0; i<total; i++) {
+        p0 = hull[i];
+        p1 = hull[(i + 1) % total];
+
+        foreach (float y; dRange) {
+            x = horizontalLineIntersection(p0, p1, y, succeed);
+            if (succeed) append(tCandidates, x.x);
+        }
+    }
+    // printf("drange: %g\n", drange);
+    // printf("drange fat: %g\n", dRange);
+    // printf("tDist: %g\n", tDist);
+    // printf("hull: %g\n", hull);
+    // printf("tCandidates: %g\n", tCandidates);
+
+    // case no intersection
+    if (len(tCandidates) == 0) {
+        return {0, 0};
+    } else {
+        return array(min(tCandidates), max(tCandidates));
+    }
+}
+
+
+
+
+
+/*
+    Utility to handle lines and cubic bezier curves.
+*/
+struct Curve {
+    vector2 p0, p1, p2, p3;
+
+    vector2[] points() {
+        return array(p0, p1, p2, p3);
+    }
+
+    void set(vector2 curve[]) {
+        this.p0 = curve[0];
+        this.p1 = curve[1];
+        this.p2 = curve[2];
+        this.p3 = curve[3];
+    }
+}
+
+struct CurveInfo {
+    Curve curve;
+    int index = 0;
+    int divCount = 0;
+    float tStart = 0.0;
+    float tEnd = 1.0;
+
+    void setSubRange(CurveInfo baseinfo; float start; float end) {
+        float t0 = baseinfo.tStart;
+        float t1 = baseinfo.tEnd;
+        this.tStart = t0 + (t1 - t0) * start;
+        this.tEnd = t0 + (t1 - t0) * end;
+    }
+}
+
+
+function void findBezierIntersection (vector2 curveA[]; vector2 curveB[]; float resultsA[]; float resultsB[])
+{
+    function void addPairs (CurveInfo pairs[]; CurveInfo infoA; CurveInfo infoB; float tRange[]; int resetDivCount) {
+        CurveInfo info;
+        info.curve->set(subcurve(infoB.curve->points(), tRange[0], tRange[1]));
+        info->setSubRange(infoB, tRange[0], tRange[1]);
+        info.index = infoB.index;
+        if (resetDivCount) {
+            infoA.divCount = 0;
+        } else {
+            info.divCount = infoB.divCount + 1;
+            infoA.divCount += 1;
+        }
+        pairs[len(pairs)] = infoA;
+        pairs[len(pairs)] = info;
+    }
+
+    float T_STOP_THRES = 0.002;  // threshold for both curve to stop clipping iteration
+    float T_LINEAR_THRES = 0.001;  // threshold for one of the curve to operate line-curve intersection
+    float SUBDIV_THRES = 0.3;
+    int MAX_CLIP_NUM = 50;
+
+    if (!doOverlap(curveA, curveB)) {
+        // printf("no intersectioin! skip! \n");
+        return;
+    }
+
+    CurveInfo infoA = CurveInfo();
+    infoA.curve->set(curveA);
+    CurveInfo infoB = CurveInfo();
+    infoB.curve->set(curveB);
+    infoB.index = 1;
+
+    CurveInfo pairs[], nextPairs[], results[];
+    pairs[0] = infoA;
+    pairs[1] = infoB;
+
+    float tRangeA[], tRangeB[];
+    float diffA, diffB, removeA, removeB;
+    vector2 pointsA[], pointsB[];
+    int count = 0;
+    while (count < MAX_CLIP_NUM && len(pairs)) {
+        for (int i=0; i<len(pairs)/2; i++) {
+            infoA = pairs[i * 2 + 0];
+            infoB = pairs[i * 2 + 1];
+            pointsA = infoA.curve->points();
+            pointsB = infoB.curve->points();
+            diffA = infoA.tEnd - infoA.tStart;
+            diffB = infoB.tEnd - infoB.tStart;
+
+            if (diffA < T_STOP_THRES && diffB < T_STOP_THRES) {
+                results[len(results)] = infoA;
+                results[len(results)] = infoB;
+                // printf("CONTINUE: Short Enough\n");
+                continue;
+            } else if (!doOverlap(pointsA, pointsB)) {
+                // printf("CONTINUE: No Overlap\n");
+                continue;
+            }
+
+             
+            if (diffA < T_LINEAR_THRES || diffB < T_LINEAR_THRES) {
+                vector2 line[] = diffA < diffB ? array(pointsA[0], pointsA[3]) : array(pointsB[0], pointsB[3]);
+                vector2 curve[] = diffA < diffB ? pointsB : pointsA;
+                float ts[] = intersectionLineBezierT(curve, line);
+                float t = sum(ts) / float(len(ts)); //average
+                if (diffA < diffB) {
+                    infoB->setSubRange(infoB, t, t);
+                } else {
+                    infoA->setSubRange(infoA, t, t);
+                }
+                results[len(results)] = infoA;
+                results[len(results)] = infoB;
+                // printf("CONTINUE: short enough half\n");
+                continue;
+            }
+
+            tRangeA = bezierClipping(pointsA, pointsB);
+            removeA = 1 - (tRangeA[1] - tRangeA[0]);
+
+
+            // compare only for the first time + after subdiv
+            if (infoA.divCount == 0) {
+                tRangeB = bezierClipping(pointsB, pointsA);
+                removeB = 1 - (tRangeB[1] - tRangeB[0]);
+            } else {
+                removeB = 0;
+            }
+
+            if (removeA == 1 || removeB == 1)  continue;
+
+            if (max(removeA, removeB) < SUBDIV_THRES) {
+                if (infoA.tEnd - infoA.tStart > infoB.tEnd - infoB.tStart) {
+                    addPairs(nextPairs, infoB, infoA, {0.0, 0.5}, 1);
+                    addPairs(nextPairs, infoB, infoA, {0.5, 1.0}, 1);
+                } else {
+                    addPairs(nextPairs, infoA, infoB, {0.0, 0.5}, 1);
+                    addPairs(nextPairs, infoA, infoB, {0.5, 1.0}, 1);
+                }
+            } else if (removeA > removeB) {
+                addPairs(nextPairs, infoB, infoA, tRangeA, 0);
+            } else {
+                addPairs(nextPairs, infoA, infoB, tRangeB, 0);
+            }
+        }
+        pairs = {};
+        pairs = set(nextPairs);
+        nextPairs = {};
+        count++;
+        // printf("count: %i\n", count);
+        // printf("pairs: %i\n", len(pairs));
+        // printf("results: %g\n", results);
+        // printf("points: %g\n %g\n", pointsA, pointsB);
+    }
+
+    foreach (CurveInfo info; results) {
+        float value = (info.tStart + info.tEnd) / 2;
+        if (info.index) append(resultsB, value);
+        else append(resultsA, value);
+    }
+}
