@@ -1,0 +1,10 @@
+{
+	"env": [
+        {
+			"GULIB": "PATH/TO/Gulib"
+        }
+	],
+	"path": [
+        "$GULIB"
+    ]
+}

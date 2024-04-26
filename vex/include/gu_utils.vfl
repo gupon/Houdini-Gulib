@@ -1,0 +1,180 @@
+int add_polyline_from_pos(int geo; vector pos[]) {
+    int nprm = addprim(0, "polyline");
+    foreach (vector p; pos) 
+        addvertex(geo, nprm, addpoint(geo, p));
+    return nprm;
+}
+
+int add_polyline_from_pos_with_id(int geo; vector pos[]; int id[]) {
+    int nprm = addprim(geo, "polyline");
+    foreach (int i; vector p; pos) {
+        int pt = addpoint(geo, p);
+        addvertex(geo, nprm, pt);
+        setpointattrib(geo, "__id", pt, id[i]);
+    }
+    return nprm;
+}
+
+
+vector2[] bounds(vector2 position[])
+{
+    vector2 min = position[0];
+    vector2 max = position[0];
+    foreach (vector2 p; position) {
+        if (p.x < min.x) min.x = p.x;
+        if (p.y < min.y) min.y = p.y;
+        if (p.x > max.x) max.x = p.x;
+        if (p.y > max.y) max.y = p.y;
+    }
+    return array(min, max);
+}
+
+vector2 center(vector2 position[]) {
+    return avg(bounds(position));
+}
+
+matrix2 mRotate(float angle)
+{
+    matrix2 m = set(cos(angle), -sin(angle), sin(angle), cos(angle));
+    return m;
+}
+
+matrix3 mTranslate(vector2 amount) {
+    matrix3 m = ident();
+    setcomp(m, amount.x, 2, 0);
+    setcomp(m, amount.y, 2, 1);
+    return m;
+}
+
+matrix3 mRotate(float angle) {
+    matrix3 m = ident();
+    setcomp(m, cos(angle), 0, 0);
+    setcomp(m, sin(angle), 0, 1);
+    setcomp(m, -sin(angle), 1, 0);
+    setcomp(m, cos(angle), 1, 1);
+    return m;
+}
+
+vector[] geopos(int geo)
+{
+    int numpt = npoints(geo);
+    vector pos[];
+    for (int i=0; i<numpt; i++) {
+        vector p = point(geo, "P", i);
+        append(pos, p);
+    }
+    return pos;
+}
+
+vector2[] geopos(int geo)
+{
+    int numpt = npoints(geo);
+    vector2 pos[];
+    for (int i=0; i<numpt; i++) {
+        vector p = point(geo, "P", i);
+        append(pos, set(p.x, p.z));
+    }
+    return pos;
+}
+
+// get positions as 2D plane
+vector2[] primpos(int geo; int primnum; int zaxis)
+{
+    int points[] = primpoints(geo, primnum);
+    vector2 pos[];
+    foreach (int pt; points) {
+        vector p = point(geo, "P", pt);
+        if (zaxis == 0) append(pos, set(p.y, p.z)); // X
+        else if (zaxis == 1) append(pos, set(p.x, p.z)); // Y
+        else if (zaxis == 2) append(pos, set(p.x, p.y)); // Z
+    }
+    return pos;
+}
+
+// set default as XZ plane
+vector2[] primpos(int geo; int primnum) {
+    return primpos(geo, primnum, 1);
+}
+
+vector[] primpos(int geo; int primnum)
+{
+    int points[] = primpoints(geo, primnum);
+    vector pos[];
+    foreach (int pt; points)
+        append(pos, vector(point(geo, "P", pt)));
+    return pos;
+}
+
+int[] primpointattrib(int geo; int primnum; string attrib_name)
+{
+    int points[] = primpoints(geo, primnum);
+    int values[];
+    foreach (int pt; points)
+        push(values, int(point(geo, attrib_name, pt)));
+    return values;
+}
+
+vector[] primpointattrib(int geo; int primnum; string attrib_name)
+{
+    int points[] = primpoints(geo, primnum);
+    vector values[];
+    foreach (int pt; points)
+        push(values, vector(point(geo, attrib_name, pt)));
+    return values;
+}
+
+vector vecXZ(vector2 p) {
+    return set(p.x, 0, p.y);
+}
+
+int pointinside(vector2 p; vector2 curve[])
+{
+    float TOL = 0.08; // about 5deg
+    float accum = 0;
+    vector2 a, b;
+    a = normalize(curve[0] - p);
+    for (int i=1; i<len(curve); i++) {
+        b = normalize(curve[i] - p);
+        accum += acos(dot(b, a)) * sign(cross(a, b).z);
+        a = b;
+    }
+    accum = abs(accum);
+    // printf("%f\n", degrees(accum));
+    return accum > PI*2-TOL && accum < PI*2+TOL;
+}
+
+function void normalize_carve_range(float start; float end; float offset)
+{
+    offset %= 1.0;
+    start += offset;
+    end += offset;
+
+    // swap
+    if (start > end) {
+        start += end;
+        end = start - end;
+        start -= end;
+    }
+
+    // adjust range
+    if (start < 0 || start >= 1) {
+        float shift = floor(start);
+        start -= shift;
+        end -= shift;
+    }
+}
+
+// fisher yates shuffle with seed
+// https://github.com/Aeoll/Aelib/blob/master/vex/include/aevex.vfl
+int[] shuffleInt(int arr[]; float seed) {
+    int n = len(arr);
+    int i, j;
+    int tmp;
+    for (i = n - 1; i > 0; i--) {
+        j = int((i+1)*rand(101 + i*seed + 1337*seed));
+        tmp = arr[j];
+        arr[j] = arr[i];
+        arr[i] = tmp;
+   }
+   return arr;
+}
